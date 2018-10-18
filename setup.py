@@ -6,11 +6,11 @@ from setuptools import setup
 
 if __name__ == '__main__':
     setup(
-	  name='dite',
+	  name='esfdw',
 	  version='0.0.1',
-	  author='Mikulas Dite',
+	  author='Xiaohui Zhang',
 	  license='Postgresql',
-	  packages=['dite']
+	  packages=['esfdw']
 	)
 ## Local Variables: ***
 ## mode:python ***

@@ -22,18 +22,20 @@ cd $_
 git checkout v1.1.0 # newer 1.2.0 does not compile on OS X
 make install
 
-git clone https://github.com/Mikulas/pg-es-fdw /tmp/pg-es-fdw
+git clone https://github.com/xiaohui-zhangxh/pg-es-fdw /tmp/pg-es-fdw
 cd $_
 python setup.py install
 ```
 
-Optionally you may install multicorn as `postgresql-9.4-python-multicorn` apt package.
+Optionally you may install multicorn as `postgresql-10-python-multicorn` apt package.
 (The python3 variant probably works as well but it was not tested.)
 
 Usage
 -----
 
 ```sql
+CREATE DATABASE es_fdw_test;
+\c es_fdw_test
 CREATE EXTENSION multicorn;
 
 CREATE SERVER multicorn_es FOREIGN DATA WRAPPER multicorn
@@ -81,6 +83,13 @@ CREATE OR REPLACE FUNCTION delete_article() RETURNS trigger AS $def$
 	END;
 $def$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION truncate_articles() RETURNS trigger AS $def$
+	BEGIN
+		DELETE FROM articles_es;
+		RETURN NULL;
+	END;
+$def$ LANGUAGE plpgsql;
+
 
 CREATE TRIGGER es_insert_article
     AFTER INSERT ON articles
@@ -96,6 +105,37 @@ CREATE TRIGGER es_delete_article
 	BEFORE DELETE ON articles
 	FOR EACH ROW EXECUTE PROCEDURE delete_article();
 
+CREATE TRIGGER es_truncate_articles
+	BEFORE TRUNCATE ON articles
+	FOR EACH STATEMENT EXECUTE PROCEDURE truncate_articles();
+```
+
+Test:
+
+```bash
+# check init es documents
+curl '10.103.2.204:9200/test/articles/_search?q=*:*&pretty'
+
+# check init articles
+psql -Upostgres es_fdw_test -c 'SELECT * FROM articles'
+
+# insert a record
+psql -Upostgres es_fdw_test -c "INSERT INTO articles (title, content, created_at) VALUES ('foo', 'spike', Now());"
+
+# check inserted record
+psql -Upostgres es_fdw_test -c 'SELECT * FROM articles'
+
+# check es documents
+curl '10.103.2.204:9200/test/articles/_search?q=*:*&pretty'
+
+# insert another record
+psql -Upostgres es_fdw_test -c "INSERT INTO articles (title, content, created_at) VALUES ('bar', 'foobar', Now());"
+
+curl '10.103.2.204:9200/test/articles/_search?q=*:*&pretty'
+
+# update record
+psql -Upostgres es_fdw_test -c "UPDATE articles SET content='yeay it updates\!' WHERE title='foo'"
+curl '10.103.2.204:9200/test/articles/_search?q=*:*&pretty'
 ```
 
 Caveats
